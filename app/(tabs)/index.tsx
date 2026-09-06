@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import PayDownSimulator from '../../components/PayDownSimulator';
 import UtilizationBar from '../../components/UtilizationBar';
 import { useAuth } from '../../contexts/AuthContext';
-import { useCreditCards } from '../../hooks/useCreditCards';
+import { CreditCard, useCreditCards } from '../../hooks/useCreditCards';
 
 export default function OverviewScreen() {
   const { session } = useAuth();
   const { cards, loading, error, refresh } = useCreditCards();
   const [refreshing, setRefreshing] = useState(false);
+  const [simCard, setSimCard] = useState<CreditCard | null>(null);
   const insets = useSafeAreaInsets();
 
   const summary = useMemo(() => {
@@ -92,7 +94,23 @@ export default function OverviewScreen() {
           </Text>
         </View>
       ) : (
-        cards.map((card) => <UtilizationBar key={card.id} card={card} />)
+        <>
+          {cards.map((card) => (
+            <Pressable key={card.id} onPress={() => setSimCard(card)}>
+              <UtilizationBar card={card} />
+            </Pressable>
+          ))}
+          <Text style={styles.hint}>Tap a card to simulate a payment</Text>
+        </>
+      )}
+
+      {simCard && (
+        <PayDownSimulator
+          key={simCard.id}
+          card={simCard}
+          onClose={() => setSimCard(null)}
+          onApplied={refresh}
+        />
       )}
     </ScrollView>
   );
@@ -132,4 +150,5 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a1a', marginBottom: 6 },
   emptySubtitle: { fontSize: 13, color: '#9ca3af', textAlign: 'center' },
+  hint: { fontSize: 12, color: '#9ca3af', textAlign: 'center', marginTop: 4 },
 });
