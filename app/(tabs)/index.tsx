@@ -1,98 +1,135 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import UtilizationBar from '../../components/UtilizationBar';
+import { useAuth } from '../../contexts/AuthContext';
+import { useCreditCards } from '../../hooks/useCreditCards';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function OverviewScreen() {
+  const { session } = useAuth();
+  const { cards, loading, error, refresh } = useCreditCards();
+  const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
-export default function HomeScreen() {
+  const summary = useMemo(() => {
+    const totalLimit = cards.reduce((sum, c) => sum + c.credit_limit, 0);
+    const totalBalance = cards.reduce((sum, c) => sum + c.current_balance, 0);
+    const overallPct = totalLimit > 0 ? Math.round((totalBalance / totalLimit) * 100) : 0;
+    const cardsOverThreshold = cards.filter(
+      (c) => c.credit_limit > 0 && c.current_balance / c.credit_limit >= 0.3
+    ).length;
+    return { totalLimit, totalBalance, overallPct, cardsOverThreshold };
+  }, [cards]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#7C3AED" />
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <Text style={styles.greeting}>
+        Hey {session?.user?.user_metadata?.username ?? 'there'} 👋
+      </Text>
+      <Text style={styles.heading}>Your utilization heatmap</Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {/* Summary card */}
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryRow}>
+          <View>
+            <Text style={styles.summaryLabel}>Overall utilization</Text>
+            <Text style={styles.summaryValue}>{summary.overallPct}%</Text>
+          </View>
+          <View
+            style={[
+              styles.summaryBadge,
+              { backgroundColor: summary.overallPct < 30 ? '#dcfce7' : summary.overallPct < 60 ? '#fef9c3' : '#fee2e2' },
+            ]}
+          >
+            <Text
+              style={[
+                styles.summaryBadgeText,
+                { color: summary.overallPct < 30 ? '#15803d' : summary.overallPct < 60 ? '#a16207' : '#b91c1c' },
+              ]}
+            >
+              {summary.overallPct < 30 ? 'Healthy' : summary.overallPct < 60 ? 'Watch it' : 'High risk'}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.summarySub}>
+          ₹{summary.totalBalance.toLocaleString('en-IN')} used of ₹{summary.totalLimit.toLocaleString('en-IN')} across {cards.length} card{cards.length !== 1 ? 's' : ''}
+        </Text>
+        {summary.cardsOverThreshold > 0 && (
+          <Text style={styles.warningText}>
+            ⚠️ {summary.cardsOverThreshold} card{summary.cardsOverThreshold > 1 ? 's are' : ' is'} over the 30% mark
+          </Text>
+        )}
+      </View>
+
+      {/* Per-card heatmap */}
+      <Text style={styles.sectionTitle}>By card</Text>
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      {cards.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No cards yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Add a credit card in the Cards tab to see your utilization heatmap.
+          </Text>
+        </View>
+      ) : (
+        cards.map((card) => <UtilizationBar key={card.id} card={card} />)
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: { flex: 1, backgroundColor: '#fafafa' },
+  content: { padding: 20, paddingBottom: 40 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fafafa' },
+  greeting: { fontSize: 15, color: '#6b6b6b', marginBottom: 4 },
+  heading: { fontSize: 24, fontWeight: '800', color: '#1a1a1a', marginBottom: 20 },
+  summaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  summaryLabel: { fontSize: 13, color: '#9ca3af', fontWeight: '600' },
+  summaryValue: { fontSize: 34, fontWeight: '800', color: '#1a1a1a', marginTop: 2 },
+  summaryBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  summaryBadgeText: { fontSize: 12.5, fontWeight: '700' },
+  summarySub: { fontSize: 13, color: '#6b6b6b', marginTop: 14 },
+  warningText: { fontSize: 13, color: '#b91c1c', marginTop: 8, fontWeight: '600' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
+  errorText: { color: '#dc2626', marginBottom: 12 },
+  emptyState: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 28,
     alignItems: 'center',
-    gap: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    borderStyle: 'dashed',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  emptyTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a1a', marginBottom: 6 },
+  emptySubtitle: { fontSize: 13, color: '#9ca3af', textAlign: 'center' },
 });

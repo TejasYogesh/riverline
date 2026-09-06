@@ -9,7 +9,7 @@ import {
     TextInput,
     View,
 } from 'react-native';
-import AuthHero from '../../components/AuthHero';
+import SignupHero from '../../components/SignupHero';
 import PrimaryButton from '../../components/PrimaryButton';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -45,7 +45,7 @@ export default function SignupScreen() {
   if (done) {
     return (
       <View style={styles.doneContainer}>
-        <AuthHero
+        <SignupHero
           title="Check your email"
           subtitle={`We sent a confirmation link to ${email}. Confirm it, then log in.`}
         />
@@ -64,7 +64,7 @@ export default function SignupScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <AuthHero title="Create your account" subtitle="Start tracking your credit health today." />
+        <SignupHero title="Create your account" subtitle="Start tracking your credit health today." />
 
         <View style={styles.form}>
           <Text style={styles.label}>Username</Text>

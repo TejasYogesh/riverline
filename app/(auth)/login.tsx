@@ -9,7 +9,7 @@ import {
     TextInput,
     View,
 } from 'react-native';
-import AuthHero from '../../components/AuthHero';
+import LoginHero from '../../components/LoginHero';
 import PrimaryButton from '../../components/PrimaryButton';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -39,7 +39,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <AuthHero title="Welcome back" subtitle="Log in to continue your credit journey." />
+        <LoginHero title="Welcome back" subtitle="Log in to continue your credit journey." />
 
         <View style={styles.form}>
           <Text style={styles.label}>Email</Text>
