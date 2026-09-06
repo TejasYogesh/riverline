@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
-import { useCreditCards } from '../../hooks/useCreditCards';
+import { Bill, daysUntil, formatDueLabel, useBills } from '../../hooks/useBills';
 import { supabase } from '../../lib/supabase';
 
 function formatDate(date: Date) {
@@ -25,28 +25,9 @@ function formatDate(date: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-type Bill = {
-  id: string;
-  title: string;
-  amount: number;
-  due_date: string;
-  status: 'pending' | 'paid' | 'overdue';
-  card_id: string | null;
-};
-
-function daysUntil(dateStr: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dateStr);
-  const diff = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  return diff;
-}
-
 export default function BillsScreen() {
   const { session } = useAuth();
-  const { cards } = useCreditCards();
-  const [bills, setBills] = useState<Bill[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { bills, loading, refresh } = useBills();
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -55,21 +36,6 @@ export default function BillsScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
-
-  const fetchBills = useCallback(async () => {
-    if (!session?.user) return;
-    const { data, error } = await supabase
-      .from('bills')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('due_date', { ascending: true });
-    if (!error) setBills(data ?? []);
-    setLoading(false);
-  }, [session?.user?.id]);
-
-  useEffect(() => {
-    fetchBills();
-  }, [fetchBills]);
 
   const openAddModal = () => {
     setTitle('');
@@ -110,13 +76,13 @@ export default function BillsScreen() {
       return;
     }
     setModalVisible(false);
-    fetchBills();
+    refresh();
   };
 
   const markPaid = async (bill: Bill) => {
     const { error } = await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id);
     if (error) Alert.alert('Error', error.message);
-    fetchBills();
+    refresh();
   };
 
   const deleteBill = (bill: Bill) => {
@@ -127,7 +93,7 @@ export default function BillsScreen() {
         style: 'destructive',
         onPress: async () => {
           await supabase.from('bills').delete().eq('id', bill.id);
-          fetchBills();
+          refresh();
         },
       },
     ]);
@@ -177,11 +143,7 @@ export default function BillsScreen() {
                         isSoon && styles.billSoon,
                       ]}
                     >
-                      {isOverdue
-                        ? `Overdue by ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`
-                        : days === 0
-                        ? 'Due today'
-                        : `Due in ${days} day${days !== 1 ? 's' : ''}`}
+                      {formatDueLabel(days)}
                     </Text>
                   </View>
                   <View style={styles.billActions}>

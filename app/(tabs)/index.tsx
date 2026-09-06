@@ -1,17 +1,30 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PayDownSimulator from '../../components/PayDownSimulator';
 import UtilizationBar from '../../components/UtilizationBar';
 import { useAuth } from '../../contexts/AuthContext';
+import { daysUntil, formatDueLabel, useBills } from '../../hooks/useBills';
 import { CreditCard, useCreditCards } from '../../hooks/useCreditCards';
 
 export default function OverviewScreen() {
   const { session } = useAuth();
   const { cards, loading, error, refresh } = useCreditCards();
+  const { bills, refresh: refreshBills } = useBills();
   const [refreshing, setRefreshing] = useState(false);
   const [simCard, setSimCard] = useState<CreditCard | null>(null);
   const insets = useSafeAreaInsets();
+
+  const billsSummary = useMemo(() => {
+    const pending = bills.filter((b) => b.status !== 'paid');
+    const overdueCount = pending.filter((b) => daysUntil(b.due_date) < 0).length;
+    const dueSoonCount = pending.filter((b) => {
+      const days = daysUntil(b.due_date);
+      return days >= 0 && days <= 3;
+    }).length;
+    return { pending, overdueCount, dueSoonCount, next: pending[0] ?? null };
+  }, [bills]);
 
   const summary = useMemo(() => {
     const totalLimit = cards.reduce((sum, c) => sum + c.credit_limit, 0);
@@ -25,7 +38,7 @@ export default function OverviewScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refresh();
+    await Promise.all([refresh(), refreshBills()]);
     setRefreshing(false);
   };
 
@@ -80,6 +93,39 @@ export default function OverviewScreen() {
           </Text>
         )}
       </View>
+
+      {/* Upcoming bills */}
+      {bills.length > 0 && (
+        <View style={styles.billsCard}>
+          <View style={styles.billsHeaderRow}>
+            <Text style={styles.billsHeading}>Upcoming bills</Text>
+            <Ionicons name="calendar-outline" size={18} color="#9ca3af" />
+          </View>
+
+          {billsSummary.overdueCount > 0 || billsSummary.dueSoonCount > 0 ? (
+            <Text style={styles.billsStatusLine}>
+              {billsSummary.overdueCount > 0 && (
+                <Text style={styles.billsOverdueText}>
+                  ⚠️ {billsSummary.overdueCount} overdue
+                </Text>
+              )}
+              {billsSummary.overdueCount > 0 && billsSummary.dueSoonCount > 0 && '  •  '}
+              {billsSummary.dueSoonCount > 0 && (
+                <Text style={styles.billsSoonText}>{billsSummary.dueSoonCount} due soon</Text>
+              )}
+            </Text>
+          ) : (
+            <Text style={styles.billsAllGoodText}>You&rsquo;re all caught up 🎉</Text>
+          )}
+
+          {billsSummary.next && (
+            <Text style={styles.billsNextText}>
+              Next: {billsSummary.next.title} — ₹{billsSummary.next.amount.toLocaleString('en-IN')}{' '}
+              ({formatDueLabel(daysUntil(billsSummary.next.due_date))})
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* Per-card heatmap */}
       <Text style={styles.sectionTitle}>By card</Text>
@@ -137,6 +183,21 @@ const styles = StyleSheet.create({
   summaryBadgeText: { fontSize: 12.5, fontWeight: '700' },
   summarySub: { fontSize: 13, color: '#6b6b6b', marginTop: 14 },
   warningText: { fontSize: 13, color: '#b91c1c', marginTop: 8, fontWeight: '600' },
+  billsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  billsHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  billsHeading: { fontSize: 15, fontWeight: '700', color: '#1a1a1a' },
+  billsStatusLine: { fontSize: 13.5, fontWeight: '600' },
+  billsOverdueText: { color: '#b91c1c' },
+  billsSoonText: { color: '#a16207' },
+  billsAllGoodText: { fontSize: 13.5, color: '#15803d', fontWeight: '600' },
+  billsNextText: { fontSize: 13, color: '#6b6b6b', marginTop: 10 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
   errorText: { color: '#dc2626', marginBottom: 12 },
   emptyState: {
